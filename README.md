@@ -1,2 +1,5 @@
 # AMSITrigger
-The Hunt for Malicious Strings
+Hunting for Malicious Strings
+
+For details see https://www.rythmstick.net/posts/AMSITrigger
+

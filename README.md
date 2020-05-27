@@ -11,8 +11,7 @@ Usage:
                                4 - Show AMSI calls (xmas tree mode)
   -m, --max=VALUE            Maximum Line Length (default 2048)
   -h, -?, --help             Show Help
-
-
-
+  
+  
 For details see https://www.rythmstick.net/posts/amsitrigger
 

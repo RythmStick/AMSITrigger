@@ -1,6 +1,11 @@
 # AMSITrigger
 Hunting for Malicious Strings
 
+Usage:
+
+  -i, --inputfile=VALUE   Powershell filename
+  
+
 
 Usage:
   -i, --inputfile=VALUE      Powershell filename

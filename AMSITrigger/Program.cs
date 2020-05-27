@@ -29,9 +29,9 @@ namespace AmsiTrigger
         public static extern int AmsiInitialize([MarshalAs(UnmanagedType.LPWStr)]string appName, out IntPtr amsiContext);
         [DllImport("Amsi.dll", EntryPoint = "AmsiUninitialize", CallingConvention = CallingConvention.StdCall)]
         public static extern void AmsiUninitialize(IntPtr amsiContext);
-          [DllImport("Amsi.dll", EntryPoint = "AmsiScanBuffer", CallingConvention = CallingConvention.StdCall)]
+        [DllImport("Amsi.dll", EntryPoint = "AmsiScanBuffer", CallingConvention = CallingConvention.StdCall)]
         public static extern int AmsiScanBuffer(IntPtr amsiContext, byte[] buffer, uint length, string contentName, IntPtr session, out AMSI_RESULT result);
- 
+
 
 
 
@@ -39,12 +39,134 @@ namespace AmsiTrigger
         {
             AMSI_RESULT result = 0;
             int returnValue;
-            IntPtr session=IntPtr.Zero;
-            
-           // returnValue = AmsiOpenSession(amsiContext, out session);
+            IntPtr session = IntPtr.Zero;
+
+            // returnValue = AmsiOpenSession(amsiContext, out session);
             returnValue = AmsiScanBuffer(amsiContext, sample, (uint)sample.Length, "Sample", IntPtr.Zero, out result);
-          //  AmsiCloseSession(amsiContext, session);
+            //  AmsiCloseSession(amsiContext, session);
             return result;
+        }
+
+        public static Boolean protectionDisabled(IntPtr amsiContext)
+        {
+
+            byte[] sample = Encoding.UTF8.GetBytes("AMSIScanBuffer");
+            AMSI_RESULT result = scanBuffer(sample, amsiContext);
+
+            if (result == AMSI_RESULT.AMSI_RESULT_NOT_DETECTED)
+            {
+                Console.WriteLine("[+] Check Real Time protection is enabled");
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+
+        }
+
+
+        public static void processFile(string inFile, int format, int maxLength, IntPtr amsiContext)
+        {
+            byte[] sample;
+            AMSI_RESULT result;
+            int startIndex;
+            int lineNumber=0;
+            string line;
+
+
+            System.IO.StreamReader file = new System.IO.StreamReader(inFile);
+
+            while ((line = file.ReadLine()) != null)
+            {
+
+                lineNumber += 1;
+                if (line.Length > maxLength)
+                {
+                    line = line.Substring(0, maxLength);
+                }
+
+                sample = Encoding.UTF8.GetBytes(line);
+
+                if (format == 4)
+                {
+                    Console.WriteLine(Encoding.Default.GetString(sample));
+                }
+                result = scanBuffer(sample, amsiContext);
+
+
+                if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)  // Line is clean
+                {
+                    if (format > 2)
+                    {
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.WriteLine(Encoding.Default.GetString(sample));
+                    }
+
+                }
+                else   // This line contains trigger(s), scrutinize it to find individual triggers
+                {
+
+                    startIndex = 0;
+
+                    // search for end of trigger
+                    for (int sampleLength = 2; sampleLength < line.Length + 1; sampleLength++)
+                    {
+                        sample = Encoding.UTF8.GetBytes(line.Substring(startIndex, sampleLength));
+                        if (format == 4)
+                        {
+                            Console.WriteLine(Encoding.Default.GetString(sample));
+                        }
+                        result = scanBuffer(sample, amsiContext);
+
+
+                        if (result == AMSI_RESULT.AMSI_RESULT_DETECTED)  // We've got where triggger ends - now find where it starts
+                        {
+
+                            while (result == AMSI_RESULT.AMSI_RESULT_DETECTED)
+                            {
+                                startIndex += 1;
+                                sample = Encoding.UTF8.GetBytes(line.Substring(startIndex, sampleLength - startIndex));
+                                if (format == 4)
+                                {
+                                    Console.WriteLine(Encoding.Default.GetString(sample));
+                                }
+                                result = scanBuffer(sample, amsiContext);
+                            }
+
+
+
+                            // now we have full trigger string
+
+                            if (format == 3)
+                            {
+                                Console.ForegroundColor = ConsoleColor.White;
+                                Console.Write(line.Substring(0, startIndex - 1));
+                                Console.ForegroundColor = ConsoleColor.Red;
+                                Console.Write(line.Substring(startIndex - 1, sampleLength - startIndex + 1));
+                            }
+                            if (format == 2)
+                            {
+
+                                Console.WriteLine("(" + lineNumber + ")\t\"" + line.Substring(startIndex - 1, sampleLength - startIndex + 1) + "\"");
+                            }
+                            if (format == 1)
+                            {
+                                Console.WriteLine("\"" + line.Substring(startIndex - 1, sampleLength - startIndex + 1) + "\"");
+                            }
+                            line = line.Substring(sampleLength);
+                            startIndex = 0;
+                            sampleLength = 1;
+                        }
+                    }
+                    if (format == 3)
+                    {
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.WriteLine(line);
+                    }
+                }
+            }
+            file.Close();
         }
 
         public static void showHelp(OptionSet p)
@@ -64,25 +186,22 @@ namespace AmsiTrigger
         }
 
 
+
+
         static void Main(string[] args)
         {
             IntPtr amsiContext;
-            AMSI_RESULT result = 0;
             int returnValue;
             int maxLength = 2048;
-            string line;
             var help = false;
             string infile = string.Empty;
             int format = 1;
-            int max=0;
-            int lineNumber = 0;
-            int startIndex;
-            byte[] sample;
+            int max = 0;
 
 
             var options = new OptionSet(){
                 {"i|inputfile=", "Powershell filename", o => infile = o},
-                {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers and columns\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
+                {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
                 {"m|max=", "Maximum Line Length (default 2048)", (int o) => max = o},
                 {"h|?|help","Show Help", o => help = true},
             };
@@ -97,12 +216,12 @@ namespace AmsiTrigger
                     return;
                 }
 
-                if (format<1 || format > 4)
+                if (format < 1 || format > 4)
                 {
                     showHelp(options);
                     return;
                 }
-                
+
             }
             catch (Exception e)
             {
@@ -122,118 +241,27 @@ namespace AmsiTrigger
             returnValue = AmsiInitialize(@"PowerShell_C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe_10.0.18362.1", out amsiContext);
 
 
-            // Check AMSI with known signature
-            sample = Encoding.UTF8.GetBytes("AMSIScanBuffer");
-            result = scanBuffer(sample, amsiContext);
-            if (result == AMSI_RESULT.AMSI_RESULT_NOT_DETECTED)
+
+            if (protectionDisabled(amsiContext))
             {
-                Console.WriteLine("[+] Check Real Time protection is enabled");
                 return;
             }
 
 
 
-            if (max>0)
+            if (max > 0)
             {
                 maxLength = max;
             }
+
             
-            
-            System.IO.StreamReader file = new System.IO.StreamReader(infile);
-            
-            while ((line = file.ReadLine()) != null)
-            {
+            processFile(infile, format, maxLength, amsiContext); 
 
-                lineNumber += 1;
-                if (line.Length > maxLength)
-                {
-                    line = line.Substring(0, maxLength);
-                }
-
-                sample = Encoding.UTF8.GetBytes(line);
-
-                if (format == 4) 
-                {
-                    Console.WriteLine(Encoding.Default.GetString(sample));
-                }
-                result = scanBuffer(sample, amsiContext);
-              
-
-                if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)  // Line is clean
-                {
-                    if (format > 2)
-                    {
-                        Console.ForegroundColor = ConsoleColor.White;
-                        Console.WriteLine(Encoding.Default.GetString(sample));
-                    }
-
-                }
-                else   // This line contains trigger(s), scrutinize it to find individual triggers
-                {
-
-                    startIndex = 0;
-                
-                    // search for end of trigger
-                   for (int sampleLength = 2; sampleLength < line.Length + 1; sampleLength++)
-                    {
-                        sample = Encoding.UTF8.GetBytes(line.Substring(startIndex, sampleLength));
-                        if (format == 4)
-                        {
-                            Console.WriteLine(Encoding.Default.GetString(sample));
-                        }
-                        result = scanBuffer(sample, amsiContext);
-
-
-                        if (result == AMSI_RESULT.AMSI_RESULT_DETECTED)  // We've got where triggger ends - now find where it starts
-                        {
-                                                          
-                            while (result == AMSI_RESULT.AMSI_RESULT_DETECTED)
-                            {
-                                startIndex += 1;
-                                sample = Encoding.UTF8.GetBytes(line.Substring(startIndex, sampleLength - startIndex));
-                                if (format == 4)
-                                {
-                                    Console.WriteLine(Encoding.Default.GetString(sample));
-                                }
-                                result = scanBuffer(sample, amsiContext);
-                            }
-
-
-
-                            // now we have full trigger string
-
-                            if (format == 3 )
-                            { 
-                                Console.ForegroundColor = ConsoleColor.White;
-                                Console.Write(line.Substring(0, startIndex - 1));
-                                Console.ForegroundColor = ConsoleColor.Red;
-                                Console.Write(line.Substring(startIndex - 1, sampleLength - startIndex + 1));
-                            }
-                            if (format == 2)
-                            {
-
-                               Console.WriteLine("("+lineNumber+","+ startIndex + ")\t\"" + line.Substring(startIndex - 1, sampleLength - startIndex + 1)+"\"");
-                            }
-                            if (format == 1)
-                            {
-                               Console.WriteLine("\""+line.Substring(startIndex - 1, sampleLength - startIndex + 1)+"\"");
-                            }
-                            line = line.Substring(sampleLength);
-                            startIndex = 0;
-                            sampleLength = 1;
-                        }
-                    }
-                    if (format == 3)
-                    {
-                        Console.ForegroundColor = ConsoleColor.White;
-                        Console.WriteLine(line);
-                    }
-                }
-
-            }
             AmsiUninitialize(amsiContext);
-            file.Close();
+ 
+            
         }
     }
 }
+
 

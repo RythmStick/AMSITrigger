@@ -3,7 +3,7 @@
 
 ### Usage:
 
-  -i, --inputfile=VALUE   Powershell filename
+####  -i, --inputfile=VALUE   Powershell filename
   -f, --format=VALUE      Output Format:
                             1 - Only show Triggers
                             2 - Show Triggers with Line numbers and Columns

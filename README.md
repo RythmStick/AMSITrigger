@@ -6,7 +6,7 @@
     -i, --inputfile=VALUE   Powershell filename
     -f, --format=VALUE      Output Format:
                                 1 - Only show Triggers
-                                2 - Show Triggers with Line numbers and Columns
+                                2 - Show Triggers with Line numbers
                                 3 - Show Triggers inline with code
                                 4 - Show AMSI calls (xmas tree mode)
     -m, --max=VALUE         Maximum line length (default 2048)

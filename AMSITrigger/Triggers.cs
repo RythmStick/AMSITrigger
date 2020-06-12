@@ -26,15 +26,14 @@ namespace AmsiTrigger
 
         private static byte[] bigSample;
         private static byte[] chunkSample;
-        private static int chunkSize = 1024;
-
+        private static int chunkSize = 4096;
+        private static int triggerStart = 0;
+        private static int triggerEnd;
+        private static int startIndex = 0;
         public static void FindTriggers()
         {
-            int triggerStart;
-            int triggerEnd;
             AMSI_RESULT result;
- 
-
+            
             if (!protectionEnabled(amsiContext))
             {
                 return;
@@ -53,8 +52,6 @@ namespace AmsiTrigger
                     client.Proxy = WebRequest.GetSystemWebProxy();
                     client.Proxy.Credentials = CredentialCache.DefaultCredentials;
                     bigSample = client.DownloadData(inURL);
-
-
                 }
                 catch (Exception e)
                 {
@@ -74,75 +71,97 @@ namespace AmsiTrigger
 
 
 
-                while (sampleIndex < bigSample.Length)
+            while (startIndex + chunkSize < bigSample.Length)
             {
-                if (sampleIndex + chunkSize > bigSample.Length)
-                {
-                    chunkSize = bigSample.Length - sampleIndex;
-                }
                 chunkSample = new byte[chunkSize];
-                Array.Copy(bigSample, sampleIndex, chunkSample, 0, chunkSize);
-                
-                sampleIndex += chunkSize;
-                result = scanBuffer(chunkSample, amsiContext);
+                Array.Copy(bigSample, startIndex, chunkSample, 0, chunkSize);
+                processChunk(chunkSample);
+            }
 
-
-
-
-                if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)  // Chunk is clean
-                {
-                    showText(chunkSample, 0, chunkSize/2, false);
-                    sampleIndex -= chunkSize/2;
-
-                }
-                else   // This line contains trigger(s), scrutinize it to find individual triggers
-                {
-                    
-                    triggerEnd = findTriggerEnd(chunkSample);
-                    
-                    if (triggerEnd > 0)
-                    {
-
-                        triggerStart=findTriggerStart(chunkSample, triggerEnd);
-                        showText(chunkSample, 0, triggerStart, false);
-                        showText(chunkSample, triggerStart, triggerEnd-triggerStart, true);
-                        sampleIndex += triggerEnd - chunkSize;
-                    }
-
-                }
-
-
-
+ 
+            while (startIndex < bigSample.Length)
+            {
+                chunkSample = new byte[bigSample.Length - startIndex];
+                Array.Copy(bigSample, startIndex, chunkSample, 0, chunkSample.Length);
+                processChunk(chunkSample);
             }
         }
 
 
 
 
-        private static int findTriggerEnd(byte[] smallSample)
+        private static void processChunk(byte[] chunkSample )
         {
+            AMSI_RESULT result;
+
+
+            result = scanBuffer(chunkSample, amsiContext);
+
+
+            if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)  
+            {
+                if (chunkSample.Length > maxSignatureLength)
+                {
+                    showText(chunkSample, 0, chunkSize - maxSignatureLength, false);
+                     startIndex += chunkSize - maxSignatureLength;
+                } else
+                {
+                    showText(chunkSample, 0, chunkSample.Length, false); 
+                    startIndex+=chunkSample.Length;
+                }
+
+                return;
+            }
+            triggerEnd = findTriggerEnd(chunkSample) + 1;
+            triggerStart = findTriggerStart(chunkSample, triggerEnd);
             
+            showText(chunkSample, 0, triggerStart, false);
+            showText(chunkSample, triggerStart, triggerEnd-triggerStart, true);
+            startIndex += triggerEnd;
+            return;
+                       
+        }
+
+            private static int findTriggerEnd(byte[] smallSample)
+        {
+
             AMSI_RESULT result;
             byte[] tmpSample;
+            int lastBytes;
 
-            for (int sampleIndex = 2; sampleIndex < smallSample.Length; sampleIndex++)
+            for (int sampleIndex = 2; sampleIndex < smallSample.Length + minSignatureLength; sampleIndex += minSignatureLength)
             {
-
+                if (sampleIndex> smallSample.Length) {
+                    sampleIndex = smallSample.Length;
+                }
                 tmpSample = new byte[sampleIndex];
                 Array.Copy(chunkSample, 0, tmpSample, 0, sampleIndex);
                 string ssstring = Encoding.Default.GetString(tmpSample);
                 result = scanBuffer(tmpSample, amsiContext);
 
+
+
+
                 if (result == AMSI_RESULT.AMSI_RESULT_DETECTED)
                 {
-                    return sampleIndex;
-                }
-                                             
-            }
 
+                    for (lastBytes = 0; lastBytes < minSignatureLength; lastBytes++)
+                    {
+
+                        tmpSample = new byte[sampleIndex - lastBytes];
+                        Array.Copy(chunkSample, 0, tmpSample, 0, sampleIndex - lastBytes);
+                        ssstring = Encoding.Default.GetString(tmpSample);
+                        result = scanBuffer(tmpSample, amsiContext);
+                        if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)
+                        {
+                            return sampleIndex - lastBytes;
+                        }
+                    }
+                    return sampleIndex - lastBytes;
+                }
+            }
             return 0;
         }
-
 
 
 
@@ -164,25 +183,23 @@ namespace AmsiTrigger
 
                 if (result == AMSI_RESULT.AMSI_RESULT_DETECTED)
                 {
+                    
                     return sampleIndex;
                 }
 
             }
-
+            
             return 0;
         }
 
-
-
-
-        
-
-
+ 
         private static void showText(byte[] output, int start, int length, Boolean highLight) 
             {
                 
                 byte[] tmpSample = new byte[length];
                 Array.Copy(output, start, tmpSample, 0, length);
+
+            
                switch (format)
                     {
 
@@ -191,17 +208,14 @@ namespace AmsiTrigger
                             if (highLight)
                             {
                                 Console.ForegroundColor = System.ConsoleColor.Gray;
-                                Console.WriteLine(Encoding.Default.GetString(tmpSample));
-                            }
+                                Console.WriteLine("[+] \"" + Encoding.Default.GetString(tmpSample) + "\"");
+                    }
                             break;
                     case 2:
                            if (highLight)
                            {
-                                byte[] tmp2Sample = new byte[sampleIndex + start + length - chunkSize];
-                                Array.Copy(bigSample, 0, tmp2Sample, 0, sampleIndex - chunkSize + length + start);
-                                lineNumber = returnsInSample(tmp2Sample) + 1;
                                 Console.ForegroundColor = System.ConsoleColor.Gray;
-                                Console.WriteLine("(" + lineNumber + ")\t\"" + Encoding.Default.GetString(tmpSample) + "\"");
+                                Console.WriteLine("[" + lineNumber + "]\t\"" + Encoding.Default.GetString(tmpSample) + "\"");
                            }
                            break;
 
@@ -210,13 +224,13 @@ namespace AmsiTrigger
                           { 
                               Console.ForegroundColor = System.ConsoleColor.Red;
                               Console.Write(Encoding.Default.GetString(tmpSample));
-                    }
+                          }
                           else
                           {
                               Console.ForegroundColor = System.ConsoleColor.Gray;
                               Console.Write(Encoding.Default.GetString(tmpSample));
-                    }
-                    break;
+                          }
+                          break;
                     
                     case 4:
                         Console.ForegroundColor = System.ConsoleColor.Gray;
@@ -224,14 +238,17 @@ namespace AmsiTrigger
                         break;
 
             }
+
+            if (format == 2) { lineNumber += returnsInSample(tmpSample, length);}
+
         }
 
-             
-   
-        private static int returnsInSample(byte[] sample)
+
+
+        private static int returnsInSample(byte[] sample,int numBytes)
         {
-          
-            return new Regex(@"\n").Matches(Encoding.Default.GetString(sample)).Count;
+            
+            return new Regex(@"\n").Matches(Encoding.Default.GetString(sample).Substring(0,numBytes)).Count;
 
 
 
@@ -249,6 +266,8 @@ namespace AmsiTrigger
 
 
             returnValue = AmsiScanBuffer(amsiContext, sample, (uint)sample.Length, "Sample", IntPtr.Zero, out result);
+            amsiCalls++;
+
             return result;
         }
 

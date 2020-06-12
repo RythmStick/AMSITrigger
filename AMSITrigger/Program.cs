@@ -15,14 +15,20 @@ namespace AmsiTrigger
 
     public static class Globals
     {
+        public static int minSignatureLength = 6;       // Playing with these can result in quicker execution time and less AMSIScanBuffer calls.
+        public static int maxSignatureLength = 2048;    // It can also reduce the accuracy of trigger identification
+
+
         public static int format = 1;
         public static int max = 0;
         public static Boolean help = false;
+        public static Boolean debug = false;
         public static string inScript;
         public static IntPtr amsiContext;
         public static string inURL;
         public static int lineNumber = 1;
-        public static int sampleIndex = 0;
+        public static int sampleIndex = 0; 
+        public static int amsiCalls = 0;
     }
 
 
@@ -43,7 +49,10 @@ namespace AmsiTrigger
         {
             
             string infile = string.Empty;
-    
+
+
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+
 
             if (!validParameters(args))
             {
@@ -58,7 +67,16 @@ namespace AmsiTrigger
             Triggers.FindTriggers();
 
             AmsiUninitialize(amsiContext);
-             
+
+            watch.Stop();
+
+            if (debug)
+            {
+                Console.ForegroundColor = System.ConsoleColor.Gray;
+                Console.WriteLine($"\n\r\n\rAmsiScanBuffer Calls: {amsiCalls}");
+                Console.WriteLine($"Total Execution Time: {watch.Elapsed.TotalSeconds} s");
+            }
+
         }
 
 
@@ -71,6 +89,7 @@ namespace AmsiTrigger
                 {"i|inputfile=", "Powershell filename or", o => inScript = o},
                 {"u|url=", "URL eg. https://10.1.1.1/Invoke-NinjaCopy.ps1", o => inURL = o},
                 {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
+                {"d|debug","Show debug info", o => debug = true},
                 {"h|?|help","Show Help", o => help = true},
             };
 
@@ -133,7 +152,7 @@ namespace AmsiTrigger
             Console.WriteLine(@"                                      |___/ |___/         v2");
             Console.WriteLine("@_RythmStick\n\n\n");
 
-
+           
             Console.WriteLine("Show triggers in Powershell file or URL.\nUsage:");
             p.WriteOptionDescriptions(Console.Out);
         }

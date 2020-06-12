@@ -10,7 +10,8 @@
                                 2 - Show Triggers with Line numbers
                                 3 - Show Triggers inline with code
                                 4 - Show AMSI calls (xmas tree mode)
-    -h, -?, --help
+    -d, --debug             Show Debug Info
+    -h, -?, --help          Show Help
   
     
 For details see https://www.rythmstick.net/posts/amsitrigger

@@ -1,4 +1,4 @@
-# AMSITrigger
+# AMSITrigger v2
 ## Hunting for Malicious Strings
 
 ### Usage:

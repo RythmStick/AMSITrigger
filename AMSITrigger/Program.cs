@@ -15,8 +15,8 @@ namespace AmsiTrigger
 
     public static class Globals
     {
-        public static int minSignatureLength = 6;       // Playing with these can result in quicker execution time and less AMSIScanBuffer calls.
-        public static int maxSignatureLength = 2048;    // It can also reduce the accuracy of trigger identification
+        public static int minSignatureLength = 6;       // Playing with these can result in quicker execution time and less AMSIScanBuffer calls. It can also reduce the accuracy of trigger identification.
+        public static int maxSignatureLength = 2048;    // Setting maxSignatureLength will ensure that signatures split over data chunks dont get missed as only the first (chunkSize - maxSignatureLength) will be reported as clean
 
 
         public static int format = 1;

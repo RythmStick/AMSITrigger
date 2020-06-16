@@ -65,6 +65,7 @@ namespace AmsiTrigger
             result = scanBuffer(bigSample, amsiContext);
             if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)
             {
+                Console.WriteLine(string.Format("[+] {0}", result));
                 return;
             }
 

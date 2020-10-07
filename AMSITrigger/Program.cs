@@ -88,7 +88,7 @@ namespace AmsiTrigger
                 {"u|url=", "URL eg. https://10.1.1.1/Invoke-NinjaCopy.ps1", o => inURL = o},
                 {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
                 {"d|debug","Show debug info", o => debug = true},
-                {"m|maxsiglength=","maximum signature Length to cater for, default=2048", (int o) => maxSignatureLength = o},
+                {"m|maxsiglength=","Maximum Signature Length to cater for, default=2048", (int o) => maxSignatureLength = o},
                 {"c|chunksize=","Chunk size to send to AMSIScanBuffer, default=4096", (int o) => chunkSize = o},
                 {"h|?|help","Show Help", o => help = true},
             };
@@ -154,7 +154,7 @@ namespace AmsiTrigger
             Console.WriteLine(@"   / _ \ | |\/| \___ \| |  | || '__| |/ _` |/ _` |/ _ \ '__|");
             Console.WriteLine(@"  / ___ \| |  | |___) | |  | || |  | | (_| | (_| |  __/ |   ");
             Console.WriteLine(@" /_/   \_\_|  |_|____/___| |_||_|  |_|\__, |\__, |\___|_|   ");
-            Console.WriteLine(@"                                      |___/ |___/         v2");
+            Console.WriteLine(@"                                      |___/ |___/         v3");
             Console.WriteLine("@_RythmStick\n\n\n");
 
            

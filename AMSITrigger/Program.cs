@@ -1,11 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Runtime.InteropServices;
 using System.IO;
-using System.Drawing;
 using NDesk.Options;
 
 namespace AmsiTrigger
@@ -17,9 +12,8 @@ namespace AmsiTrigger
     {
         public static int minSignatureLength = 6;       // Playing with these can result in quicker execution time and less AMSIScanBuffer calls. It can also reduce the accuracy of trigger identification.
         public static int maxSignatureLength = 2048;    // Setting maxSignatureLength will ensure that signatures split over data chunks dont get missed as only the first (chunkSize - maxSignatureLength) will be reported as clean
-
-
         public static int format = 1;
+        public static int chunkSize = 4096;
         public static int max = 0;
         public static Boolean help = false;
         public static Boolean debug = false;
@@ -29,6 +23,8 @@ namespace AmsiTrigger
         public static int lineNumber = 1;
         public static int sampleIndex = 0; 
         public static int amsiCalls = 0;
+        public static int chunksProcessed = 0;
+        public static int triggersFound = 0;
     }
 
 
@@ -73,7 +69,9 @@ namespace AmsiTrigger
             if (debug)
             {
                 Console.ForegroundColor = System.ConsoleColor.Gray;
-                Console.WriteLine($"\n\r\n\rAmsiScanBuffer Calls: {amsiCalls}");
+                Console.WriteLine($"\n\r\n\rChunks Processed: {chunksProcessed}");
+                Console.WriteLine($"Triggers Found: {triggersFound}");
+                Console.WriteLine($"AmsiScanBuffer Calls: {amsiCalls}");
                 Console.WriteLine($"Total Execution Time: {watch.Elapsed.TotalSeconds} s");
             }
 
@@ -90,6 +88,8 @@ namespace AmsiTrigger
                 {"u|url=", "URL eg. https://10.1.1.1/Invoke-NinjaCopy.ps1", o => inURL = o},
                 {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
                 {"d|debug","Show debug info", o => debug = true},
+                {"m|maxsiglength=","maximum signature Length to cater for, default=2048", (int o) => maxSignatureLength = o},
+                {"c|chunksize=","Chunk size to send to AMSIScanBuffer, default=4096", (int o) => chunkSize = o},
                 {"h|?|help","Show Help", o => help = true},
             };
 
@@ -130,6 +130,11 @@ namespace AmsiTrigger
                 return false;
             }
 
+            if (chunkSize < maxSignatureLength)
+            {
+                Console.WriteLine("[+] chunksize should always be > maxSignatureLength");
+                return false;
+            }
 
 
             if (inScript!=null && !File.Exists(inScript))

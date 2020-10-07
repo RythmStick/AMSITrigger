@@ -1,12 +1,9 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace AmsiTrigger
 {
@@ -26,7 +23,6 @@ namespace AmsiTrigger
 
         private static byte[] bigSample;
         private static byte[] chunkSample;
-        private static int chunkSize = 4096;
         private static int triggerStart = 0;
         private static int triggerEnd;
         private static int startIndex = 0;
@@ -72,10 +68,10 @@ namespace AmsiTrigger
 
 
 
-            while (startIndex + chunkSize < bigSample.Length)
+            while (startIndex + AmsiTrigger.Globals.chunkSize < bigSample.Length)
             {
-                chunkSample = new byte[chunkSize];
-                Array.Copy(bigSample, startIndex, chunkSample, 0, chunkSize);
+                chunkSample = new byte[AmsiTrigger.Globals.chunkSize];
+                Array.Copy(bigSample, startIndex, chunkSample, 0, AmsiTrigger.Globals.chunkSize);
                 processChunk(chunkSample);
             }
 
@@ -95,7 +91,8 @@ namespace AmsiTrigger
         {
             AMSI_RESULT result;
 
-
+            chunksProcessed++;
+            
             result = scanBuffer(chunkSample, amsiContext);
 
 
@@ -103,8 +100,8 @@ namespace AmsiTrigger
             {
                 if (chunkSample.Length > maxSignatureLength)
                 {
-                    showText(chunkSample, 0, chunkSize - maxSignatureLength, false);
-                     startIndex += chunkSize - maxSignatureLength;
+                    showText(chunkSample, 0, AmsiTrigger.Globals.chunkSize - maxSignatureLength, false);
+                     startIndex += AmsiTrigger.Globals.chunkSize - maxSignatureLength;
                 } else
                 {
                     showText(chunkSample, 0, chunkSample.Length, false); 
@@ -113,9 +110,12 @@ namespace AmsiTrigger
 
                 return;
             }
-            triggerEnd = findTriggerEnd(chunkSample) + 1;
-            triggerStart = findTriggerStart(chunkSample, triggerEnd);
-            
+            triggerEnd = findTriggerEnd() + 1;
+            triggerStart = findTriggerStart(triggerEnd);
+
+
+            triggersFound++;
+
             showText(chunkSample, 0, triggerStart, false);
             showText(chunkSample, triggerStart, triggerEnd-triggerStart, true);
             startIndex += triggerEnd;
@@ -123,21 +123,20 @@ namespace AmsiTrigger
                        
         }
 
-            private static int findTriggerEnd(byte[] smallSample)
+            private static int findTriggerEnd()
         {
 
             AMSI_RESULT result;
             byte[] tmpSample;
             int lastBytes;
 
-            for (int sampleIndex = 2; sampleIndex < smallSample.Length + minSignatureLength; sampleIndex += minSignatureLength)
+            for (int sampleIndex = 2; sampleIndex < chunkSample.Length + minSignatureLength; sampleIndex += minSignatureLength)
             {
-                if (sampleIndex> smallSample.Length) {
-                    sampleIndex = smallSample.Length;
+                if (sampleIndex> chunkSample.Length) {
+                    sampleIndex = chunkSample.Length;
                 }
                 tmpSample = new byte[sampleIndex];
                 Array.Copy(chunkSample, 0, tmpSample, 0, sampleIndex);
-                string ssstring = Encoding.Default.GetString(tmpSample);
                 result = scanBuffer(tmpSample, amsiContext);
 
 
@@ -151,7 +150,6 @@ namespace AmsiTrigger
 
                         tmpSample = new byte[sampleIndex - lastBytes];
                         Array.Copy(chunkSample, 0, tmpSample, 0, sampleIndex - lastBytes);
-                        ssstring = Encoding.Default.GetString(tmpSample);
                         result = scanBuffer(tmpSample, amsiContext);
                         if (result != AMSI_RESULT.AMSI_RESULT_DETECTED)
                         {
@@ -169,7 +167,7 @@ namespace AmsiTrigger
 
 
 
-        private static int findTriggerStart(byte[] smallSample,int triggerEnd)
+        private static int findTriggerStart(int triggerEnd)
         {
             AMSI_RESULT result;
             byte[] tmpSample;
@@ -250,9 +248,6 @@ namespace AmsiTrigger
         {
             
             return new Regex(@"\n").Matches(Encoding.Default.GetString(sample).Substring(0,numBytes)).Count;
-
-
-
         }
         private static AMSI_RESULT scanBuffer(byte[] sample, IntPtr amsiContext)
         {
@@ -268,7 +263,6 @@ namespace AmsiTrigger
 
             returnValue = AmsiScanBuffer(amsiContext, sample, (uint)sample.Length, "Sample", IntPtr.Zero, out result);
             amsiCalls++;
-
             return result;
         }
 

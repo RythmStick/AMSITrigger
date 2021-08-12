@@ -47,6 +47,7 @@ namespace AmsiTrigger
                     WebClient client = new WebClient();
                     client.Proxy = WebRequest.GetSystemWebProxy();
                     client.Proxy.Credentials = CredentialCache.DefaultCredentials;
+                    ServicePointManager.SecurityProtocol = System.Net.SecurityProtocolType.Tls | (SecurityProtocolType)768 | (SecurityProtocolType)3072;
                     bigSample = client.DownloadData(inURL);
                 }
                 catch (Exception e)

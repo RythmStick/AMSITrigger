@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 using System.IO;
-using NDesk.Options;
+using System.Diagnostics.Eventing.Reader;
 
 namespace AmsiTrigger
 {
@@ -14,7 +14,8 @@ namespace AmsiTrigger
         public static int maxSignatureLength = 2048;    // Setting maxSignatureLength will ensure that signatures split over data chunks dont get missed as only the first (chunkSize - maxSignatureLength) will be reported as clean
         public static int format = 1;
         public static int chunkSize = 4096;
-        public static int max = 0;
+        public static int max = 0; 
+        public static int pauseOutput = 0;
         public static Boolean help = false;
         public static Boolean debug = false;
         public static string inScript;
@@ -79,74 +80,116 @@ namespace AmsiTrigger
 
 
 
-        public static Boolean validParameters(string[] args)
+         public static Boolean validParameters(string[] args)
         {
+            string allArgs = System.Environment.CommandLine.Substring(System.Environment.CommandLine.IndexOf(" ") + 1);
 
-
-            var options = new OptionSet(){
-                {"i|inputfile=", "Powershell filename or", o => inScript = o},
-                {"u|url=", "URL eg. https://10.1.1.1/Invoke-NinjaCopy.ps1", o => inURL = o},
-                {"f|format=", "Output Format:"+"\n1 - Only show Triggers\n2 - Show Triggers with line numbers\n3 - Show Triggers inline with code\n4 - Show AMSI calls (xmas tree mode)", (int o) => format = o},
-                {"d|debug","Show debug info", o => debug = true},
-                {"m|maxsiglength=","Maximum Signature Length to cater for, default=2048", (int o) => maxSignatureLength = o},
-                {"c|chunksize=","Chunk size to send to AMSIScanBuffer, default=4096", (int o) => chunkSize = o},
-                {"h|?|help","Show Help", o => help = true},
-            };
-
-            try
+            foreach (string fullarg in args)
             {
-                options.Parse(args);
 
-                if (help || args.Length == 0)
+                if (fullarg == "-debug" || fullarg == "-d")
                 {
-                    showHelp(options);
+                    debug = true;
+                    allArgs = allArgs.Replace(fullarg, "");
+                }
+                else if (fullarg == "-h" || fullarg == "-help" || fullarg == "-?")
+                {
+                    showHelp();
                     return false;
                 }
+                else if (fullarg.IndexOf("=")==-1)
+                {
+                    Console.WriteLine("[-] Parameter Error:"+allArgs);
+                    return false;
+                }
+                else
+                {
 
+                    string param = fullarg.Substring(0, fullarg.IndexOf("="));
+                    switch (param)
+                    {
+                        case ("-i"):
+                        case ("-inputfile"):
+                            inScript = fullarg.Substring(fullarg.IndexOf("=") + 1);
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-u"):
+                        case ("-url"):
+                            inURL = fullarg.Substring(fullarg.IndexOf("=") + 1);
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-f"):
+                        case ("-format"):
+                            format = Int32.Parse((fullarg.Substring(fullarg.IndexOf("=") + 1)));
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-m"):
+                        case ("-maxsiglength"):
+                            maxSignatureLength = Int32.Parse((fullarg.Substring(fullarg.IndexOf("=") + 1)));
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-p"):
+                        case ("-pause"):
+                            pauseOutput = Int32.Parse((fullarg.Substring(fullarg.IndexOf("=") + 1)));
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-c"):
+                        case ("-chunksize"):
+                            chunkSize = Int32.Parse((fullarg.Substring(fullarg.IndexOf("=") + 1)));
+                            allArgs = allArgs.Replace(fullarg, "");
+                            break;
+
+                        case ("-h"):
+                        case ("-help"):
+                            showHelp();
+                            break;
+
+                        default:
+                            showHelp();
+                            break;
+                    }
+                }
+            }
+
+                if (inScript!=null && inURL!= null)
+                {
+                    Console.WriteLine("[-] Supply either -i or -u, not both");
+                    return false;
+                }
                 if (format < 1 || format > 4)
                 {
-                    showHelp(options);
+                    Console.WriteLine("[-] Format should be 1-4");
+                    return false;
+                }
+                if (inURL != null && inURL.ToLower().Substring(0, 7) != "http://" && inURL.ToLower().Substring(0, 8) != "https://")
+                {
+                    Console.WriteLine("[+] Invalid URL - must begin with http:// or https://");
                     return false;
                 }
 
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine(e.Message);
-                showHelp(options);
-                return false;
-            }
+                if (chunkSize < maxSignatureLength)
+                {
+                    Console.WriteLine("[+] chunksize should always be > maxSignatureLength");
+                    return false;
+                }
 
 
-            if (inScript!=null && inURL!=null)
-            {
-                Console.WriteLine("[+] Supply either -i or -u, not both");
-                return false;
-            }
-
-            if (inURL!=null && inURL.ToLower().Substring(0,7)!="http://" && inURL.ToLower().Substring(0, 8) != "https://") 
-            {
-                Console.WriteLine("[+] Invalid URL - must begin with http:// or https://");
-                return false;
-            }
-
-            if (chunkSize < maxSignatureLength)
-            {
-                Console.WriteLine("[+] chunksize should always be > maxSignatureLength");
-                return false;
-            }
-
-
-            if (inScript!=null && !File.Exists(inScript))
-            {
-                Console.WriteLine("[+] File not found");
-                return false;
-            }
+                if (inScript != null && !File.Exists(inScript))
+                {
+                    Console.WriteLine("[+] File not found");
+                    return false;
+                }
+            
             return true;
         }
 
 
-        public static void showHelp(OptionSet p)
+        public static void showHelp()
         {
 
             Console.WriteLine(@"     _    __  __ ____ ___ _____     _");
@@ -154,12 +197,22 @@ namespace AmsiTrigger
             Console.WriteLine(@"   / _ \ | |\/| \___ \| |  | || '__| |/ _` |/ _` |/ _ \ '__|");
             Console.WriteLine(@"  / ___ \| |  | |___) | |  | || |  | | (_| | (_| |  __/ |   ");
             Console.WriteLine(@" /_/   \_\_|  |_|____/___| |_||_|  |_|\__, |\__, |\___|_|   ");
-            Console.WriteLine(@"                                      |___/ |___/         v3");
-            Console.WriteLine("@_RythmStick\n\n\n");
+            Console.WriteLine(@"                                      |___/ |___/         v4");
+            Console.WriteLine("@_RythmStick\n\n");
 
            
             Console.WriteLine("Show triggers in Powershell file or URL.\nUsage:");
-            p.WriteOptionDescriptions(Console.Out);
+
+            Console.WriteLine("-i|-inputfile= : Powershell filename or");
+            Console.WriteLine("-u|-url= : URL eg. https://10.1.1.1/Invoke-NinjaCopy.ps1");
+            Console.WriteLine("\n-f|-format= : Output Format:" + "\n\t1 - Only show Triggers\n\t2 - Show Triggers with line numbers\n\t3 - Show Triggers inline with code\n\t4 - Show AMSI calls (xmas tree mode)");
+            Console.WriteLine("-d|-debug : Show debug info");
+            Console.WriteLine("-m|-maxsiglength= : Maximum Signature Length to cater for, default=2048");
+            Console.WriteLine("-c|-chunksize= : Chunk size to send to AMSIScanBuffer, default=4096");
+            Console.WriteLine("-p|-pause= : Number of triggers which will pause execution");
+            Console.WriteLine("-h|-?|-help : Show Help");
+
+            
         }
 
 

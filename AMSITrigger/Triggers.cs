@@ -114,11 +114,23 @@ namespace AmsiTrigger
             triggerEnd = findTriggerEnd() + 1;
             triggerStart = findTriggerStart(triggerEnd);
 
-
+           
             triggersFound++;
 
             showText(chunkSample, 0, triggerStart, false);
             showText(chunkSample, triggerStart, triggerEnd-triggerStart, true);
+
+            if (pauseOutput > 0)
+            {
+                Math.DivRem(triggersFound, pauseOutput, out int remainder);
+                if (remainder == 0)
+                {
+                    Console.ForegroundColor = System.ConsoleColor.Gray;
+                    Console.WriteLine("\nPress any key to continue...");
+                    Console.ReadKey();
+                }
+            }
+
             startIndex += triggerEnd;
             return;
                        
@@ -270,7 +282,7 @@ namespace AmsiTrigger
         private static Boolean protectionEnabled(IntPtr amsiContext)
         {
 
-            byte[] sample = Encoding.UTF8.GetBytes("AMSIScanBuffer");
+            byte[] sample = Encoding.UTF8.GetBytes("Invoke-mimikatz");
             AMSI_RESULT result = Triggers.scanBuffer(sample, amsiContext);
 
             if (result == AMSI_RESULT.AMSI_RESULT_NOT_DETECTED)

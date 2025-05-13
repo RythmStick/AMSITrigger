@@ -51,7 +51,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
-    <None Include="FodyWeavers.xsd">
       <SubType>Designer</SubType>
     </None>
   </ItemGroup>
